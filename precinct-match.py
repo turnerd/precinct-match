@@ -52,6 +52,9 @@ def main():
 	vfPrecincts = {} #dict with key = vf_precinct_id and value = Precinct objects
 #	vfPrecincts = [] #list of Precinct objects
 	sourcedPrecinctsByCounty = {} #dictionary with key = county_name and value = LIST of Precinct objects
+	matched = []
+	sourced_unmatched = []
+	vf_unmatched = []
 
 	sfile = open('sourced_precincts.csv', 'r')
 	counter = 0
@@ -75,21 +78,36 @@ def main():
 
 	match_count = 0
 	for v in vfPrecincts:
+		match_found = False
 		cnty = vfPrecincts[v].vf_county
 		if (cnty in sourcedPrecinctsByCounty):
 			for sp in sourcedPrecinctsByCounty[cnty]:
 				if (vfPrecincts[v].vf_precinct_code == sp.s_precinct_number): #this may not be right criteria
 					vfPrecincts[v].combineInfo(sp)
-					vfPrecincts[v].printfull()
+					matched.append(vfPrecincts[v])
+					match_found = True
 					match_count+=1
+		if (not match_found):
+			vf_unmatched.append(vfPrecincts[v])
+					#how to get list of sourced_unmatched?
 		else:
 			print "VF COUNTY (%s) MISSING FROM SOURCED" % cnty #handle blank final line
-
+	
+	print '\n\n############## MATCHED #############'
+	for p in matched:
+		p.printfull()
+	print match_count
+	
+	print '\n\n############## VF UNMATCHED ##########'
+	for p in vf_unmatched:
+		p.printfull() #handle zero unmatched
+	print 'num vf_unmatched is %d ' % len(vf_unmatched)
+		
 
 	#county names should match exactly; 
 	#vf_precinct_name may contain the sourced_name (example, vf_precinct_name 'Canyon - 09' contains sourced name '9')
 	#sourced_precinct_number may match vf_precinct_code
-	print match_count
+	
 	print 'done!'
 
 if __name__ == "__main__":
