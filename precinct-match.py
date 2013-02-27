@@ -34,12 +34,20 @@ class Precinct:
 		self.polling_location_ids = polling_location_ids
 		self.source = source
 		self.INTERNAL_notes = INTERNAL_notes
-	def pInfo(self):
-		print '\nvf_county: %s s_county: %s vf_precinct_name: %s s_precinct_name: %s' % (self.vf_county, self.s_county, self.vf_precinct_name, self.s_precinct_name)
-
-def MyFn(self):
-	return self.vf_county
-
+	def combineInfo(self, sp):
+		self.s_precinct_id = sp.s_precinct_id
+		self.s_county = sp.s_county
+		self.s_precinct_name = sp.s_precinct_name
+		self.s_precinct_number = sp.s_precinct_number
+		self.s_ward = sp.s_ward
+		self.polling_location_ids = sp.polling_location_ids
+		self.source = sp.source
+		self.INTERNAL_notes = sp.INTERNAL_notes
+	def printfull(self):
+		print '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s' % (self.s_precinct_id,self.vf_precinct_id,self.s_county,self.vf_county,
+			self.s_precinct_name,self.vf_precinct_name,self.s_precinct_number,self.vf_precinct_code,self.s_ward,self.vf_ward,
+			self.vf_precinct_count,self.polling_location_ids)
+		
 def main():
 	vfPrecincts = {} #dict with key = vf_precinct_id and value = Precinct objects
 #	vfPrecincts = [] #list of Precinct objects
@@ -57,34 +65,31 @@ def main():
 			else:
 				sourcedPrecinctsByCounty[cnty] = [precinctObj]
 		counter+=1		
-	#may need to store some fields as numbers rather than strings?
 	sfile.close()
 	
 	vfile = open('vf_precincts.csv', 'r')
 	for line in vfile:
 		parts = line.split(',')
-		vfPrecincts[parts[0]] = (Precinct(vf_precinct_id=parts[0],vf_county=parts[1],vf_ward=parts[2],vf_precinct_name=parts[3],vf_precinct_code=parts[4],vf_precinct_count=parts[5]))
+		vfPrecincts[parts[0]] = Precinct(vf_precinct_id=parts[0],vf_county=parts[1],vf_ward=parts[2],vf_precinct_name=parts[3],vf_precinct_code=parts[4],vf_precinct_count=parts[5].strip())
 	vfile.close()
 
 	match_count = 0
-	for vfp in vfPrecincts:
-		cnty = vfPrecincts[vfp].vf_county
+	for v in vfPrecincts:
+		cnty = vfPrecincts[v].vf_county
 		if (cnty in sourcedPrecinctsByCounty):
 			for sp in sourcedPrecinctsByCounty[cnty]:
-				if (vfPrecincts[vfp].vf_precinct_code == sp.s_precinct_number):
-					vfPrecincts[vfp].pInfo()
-					sp.pInfo()
+				if (vfPrecincts[v].vf_precinct_code == sp.s_precinct_number): #this may not be right criteria
+					vfPrecincts[v].combineInfo(sp)
+					vfPrecincts[v].printfull()
 					match_count+=1
-					print match_count
 		else:
-			print "VF COUNTY (%s) MISSING FROM SOURCED" % cnty
-	#handle blank final line
+			print "VF COUNTY (%s) MISSING FROM SOURCED" % cnty #handle blank final line
 
 
 	#county names should match exactly; 
 	#vf_precinct_name may contain the sourced_name (example, vf_precinct_name 'Canyon - 09' contains sourced name '9')
 	#sourced_precinct_number may match vf_precinct_code
-	
+	print match_count
 	print 'done!'
 
 if __name__ == "__main__":
