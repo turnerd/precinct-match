@@ -2,7 +2,7 @@
 #
 # Derek Turner 2013 for NOI VIP / Election Administration team job application
 #
-
+#
 #check presence of two input files; check that they are well formatted
 #read them into memory
 #do a prelim match based on perfect equality
@@ -14,8 +14,6 @@
 #VF: vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count
 #matched: sourced_precinct_id,vf_precinct_id,sourced_county,vf_precinct_county,sourced_precinct_name,vf_precinct_name,
 #	sourced_precinct_number,vf_precinct_code,sourced_ward,vf_precinct_ward,vf_precinct_count,polling_location_ids
-
-#dict of (lists of Precincts) with county name for keys
 
 class Precinct:
 	def __init__(self, s_precinct_id='',vf_precinct_id='',s_county='',vf_county='',s_precinct_name='',vf_precinct_name='',
@@ -51,8 +49,8 @@ class Precinct:
 		return '%s,%s,%s,%s,%s,%s\n' % (self.vf_precinct_id,self.vf_county,self.vf_ward,self.vf_precinct_name,self.vf_precinct_code,
 			self.vf_precinct_count)
 	def getSourcedInfo(self):
-		return '%s,%s,%s,%s,%s,%s,%s,%s\n' % (self.s_precinct_id,self.s_county,self.s_precinct_name,self.s_precinct_number,self.s_ward,
-			self.polling_location_ids,self.source,self.internal_notes)
+		return '%s,%s,%s,%s,%s,%s\n' % (self.s_precinct_id,self.s_county,self.s_precinct_name,self.s_precinct_number,self.s_ward,
+			self.polling_location_ids) #matching the example output leaves off self.source,self.internal_notes
 
 def countySort(precinctObj):
 		if (precinctObj.vf_county != ''): return precinctObj.vf_county
@@ -93,33 +91,34 @@ def main():
 		cnty = vp.vf_county
 		if (cnty in sourcedPrecinctsPerCounty):
 			for sp in sourcedPrecinctsPerCounty[cnty]:
-				if (vp.vf_precinct_code == sp.s_precinct_number): #this may not be right criteria
+				if ((vp.vf_precinct_code == sp.s_precinct_number) or (vp.vf_precinct_name == sp.s_precinct_name)): 
 					vp.copySourcedInfo(sp)
 					matched.append(vp)
 					sourcedPrecinctsPerCounty[cnty].remove(sp)
 					match_found = True
 		if (not match_found):
 			vf_unmatched.append(vp)
-		#else: print "VF COUNTY (%s) MISSING FROM SOURCED" % cnty 
-			#handle blank final line
+		#handle blank final line
 	
-	print '\n\n############## MATCHED #############'
-	fmatched = open('matched_test.csv','w')
+	print '############## MATCHED #############'
+	fmatched = open('test_output/matched_test.csv','w')
+	fmatched.write('sourced_precinct_id,vf_precinct_id,sourced_county,vf_precinct_county,sourced_precinct_name,vf_precinct_name,sourced_precinct_number,vf_precinct_code,sourced_ward,vf_precinct_ward,vf_precinct_count,polling_location_ids\n')
 	for p in sorted(matched,key=countySort):
 		fmatched.write(p.getCombinedInfo())
 	fmatched.close()
 	
-	print '\n\n############## VF UNMATCHED ##########'
-	fvf_unmatched = open('vf_unmatched_test.csv','w') 
-	#print headers too
+	print '############## VF UNMATCHED ##########'
+	fvf_unmatched = open('test_output/vf_unmatched_test.csv','w')
+	fvf_unmatched.write('vf_precinct_id,vf_precinct_county,vf_precinct_name,vf_precinct_code,vf_precinct_ward,vf_precinct_count\n') 
 	for p in sorted(vf_unmatched,key=countySort):
 		fvf_unmatched.write(p.getVFInfo())
 	fvf_unmatched.close() 
 	#handle zero unmatched
 	
-	print '\n\n############## SOURCED UNMATCHED ############'
+	print '############## SOURCED UNMATCHED ############'
 	sourced_unmatched_counter = 0
-	fs_unmatched = open('sourced_unmatched_test.csv','w')
+	fs_unmatched = open('test_output/sourced_unmatched_test.csv','w')
+	fs_unmatched.write('sourced_precinct_id,sourced_county,sourced_precinct_name,sourced_precinct_number,sourced_ward,polling_location_ids\n')
 	for cnty in sorted(sourcedPrecinctsPerCounty.keys()):
 		for p in sourcedPrecinctsPerCounty[cnty]:
 			fs_unmatched.write(p.getSourcedInfo())
@@ -132,7 +131,7 @@ def main():
 
 	#county names should match exactly; 
 	#vf_precinct_name may contain the sourced_name (example, vf_precinct_name 'Canyon - 09' contains sourced name '9')
-	#sourced_precinct_number may match vf_precinct_code
+	#sourced_precinct_number may match vf_precinct_code except for leading zero
 	
 	print 'done!'
 #1) sort list of Precinct Objects -- DONE
