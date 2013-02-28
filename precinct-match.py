@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # Derek Turner 2013 for NOI VIP / Election Administration team
-
+#
 
 import re
 
@@ -44,10 +44,14 @@ class Precinct:
 			self.s_ward,self.polling_location_ids,self.source,self.internal_notes) 
 			#source,internal_notes are not in example output but retained here for utility
 
+### This is a helper function to allow the sorting of a list of Precinct objects by their county names
 def countySort(precinctObj):
 	if (precinctObj.vf_county != ''): return precinctObj.vf_county
 	else: return precinctObj.s_county 
 
+### This function contains the logic for matches that are highly confident--they must have the same county, 
+### plus either a match on code and number (dropping leading zeros since these are stored as strings) 
+### or a match on name, provided the names aren't blank.
 def precinctsStrongMatch(vp,sp):
 	if ((vp.vf_precinct_code == '') and (sp.sp_precinct_number == '')):
 			print "code and number can't both be blank"
@@ -57,14 +61,18 @@ def precinctsStrongMatch(vp,sp):
 	if ((vp.vf_precinct_name == '') or (sp.s_precinct_name == '')): return False
 	if (vp.vf_precinct_name.lower() == sp.s_precinct_name.lower()): return True
 	return False
-	
+
+### This function contains the logic for matches that are somewhat less confident. These matches are rejected (in the logic of the 
+### second pass) if multiple possible match combinations are found for any one precinct. 
+### Since the sourced name is often a shorter version of the voterfile name, we term these the 'short_name' and the 'long_name' and 
+### check to see if the short_name is a substring of the long one.  Names that contain only numbers are not allowed to be matched
+### this way since they are very likely to create false positives.
 def precinctsWeakMatch(vp,sp):
 	short_name = re.sub('[()]','',sp.s_precinct_name) #unmatched parentheses are a problem in regex pattern, so all parens are removed
 	long_name = re.sub('[()]','',vp.vf_precinct_name)
-	#print '\tworking with short_name(sp) %s and long_name(vp) %s (%s county)' %(short_name,long_name,vp.vf_county)
 	if ((short_name == '') or (long_name == '')): return False
 	if (not re.search(r'[a-zA-Z]',short_name)):
-		print "sourced_precinct_name contains only numbers (%s)--insufficient to make substring match" % (short_name)
+		#print "s_precinct_id %s has a name containing only numbers (%s)--insufficient to do a substring match" % (sp.s_precinct_id,short_name)
 		return False
 	match = re.search(short_name,long_name,re.IGNORECASE)
 	if (match):
@@ -142,7 +150,8 @@ def main():
 			if (strong_matches_to_vp == 0):
 				vf_unmatched.append(vp)
 			assert strong_matches_to_vp <= 1, "vf_precinct_id %s has matched to more than one sourced precinct on name or code alone"
-			#this is an unexpected condition that would indicate a false positive and therefore prints to standard error
+				#assert checks for an unexpected condition that would indicate a false positive, and therefore prints to stderr
+		else: vf_unmatched.append(vp) #this is for cases where there are no sourced precincts with a matching county
 
 ### SECOND PASS: WEAK MATCH ###
 	for vp in vf_unmatched:
@@ -153,7 +162,7 @@ def main():
 				if (precinctsWeakMatch(vp,sp)):
 					weak_matches_to_vp+=1
 					if (weak_matches_to_vp > 1):
-						print "%d weak matches! vf_precinct_name '%s', 1st s_precinct_name '%s', 2nd s_precinct_name '%s'--none counted" % (weak_matches_to_vp,vp.vf_precinct_name, temp, sp.s_precinct_name)
+						print "vf_precinct_name '%s' has %d possible weak matches (incl '%s' and '%s') so ignoring all" % (vp.vf_precinct_name,weak_matches_to_vp,temp,sp.s_precinct_name)
 					temp = sp.s_precinct_name
 			if (weak_matches_to_vp == 1):
 				vp.copySourcedInfo(sp)
@@ -162,21 +171,20 @@ def main():
 				vf_unmatched.remove(vp)
 	
 ### OUTPUT ###
-	fmatched = open('matched_test.csv','w')
-		#update output file names to spec
+	fmatched = open('matched.csv','w')
 	fmatched.write('sourced_precinct_id,vf_precinct_id,sourced_county,vf_precinct_county,sourced_precinct_name,vf_precinct_name,sourced_precinct_number,vf_precinct_code,sourced_ward,vf_precinct_ward,vf_precinct_count,polling_location_ids\n')
 	for p in sorted(matched,key=countySort):
 		fmatched.write(p.getCombinedInfo())
 	fmatched.close()
 	
-	fvf_unmatched = open('vf_unmatched_test.csv','w')
+	fvf_unmatched = open('vf_unmatched.csv','w')
 	fvf_unmatched.write('vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count\n') 
 	for p in sorted(vf_unmatched,key=countySort):
 		fvf_unmatched.write(p.getVFInfo())
 	fvf_unmatched.close() 
 	
 	sourced_unmatched_counter = 0
-	fs_unmatched = open('sourced_unmatched_test.csv','w')
+	fs_unmatched = open('sourced_unmatched.csv','w')
 	fs_unmatched.write('sourced_precinct_id,sourced_county,sourced_precinct_name,sourced_precinct_number,sourced_ward,polling_location_ids,source,internal_notes\n')
 	for cnty in sorted(sourcedPrecinctsPerCounty.keys()):
 		for p in sourcedPrecinctsPerCounty[cnty]:
@@ -184,20 +192,9 @@ def main():
 			sourced_unmatched_counter+=1
 	fs_unmatched.close()
 	
-	print 'Matched %d precincts' % len(matched)
+	print '\nMatched %d precincts' % len(matched)
 	print '%d vf precincts unmatched' % len(vf_unmatched)
-	print '%d sourced precincts unmatched' % sourced_unmatched_counter
-
-	#county names should match exactly; 
-	#vf_precinct_name may contain the sourced_name (example, vf_precinct_name 'Canyon - 09' contains sourced name '9')
-	#sourced_precinct_number may match vf_precinct_code except for leading zero
-	
-	print 'done!'
-
-
-#2) make vf_unmatched correct (total num and set) off by one error? sum of vf_unmatched lower by 1 --seems to be when values are null
-#3) test
-
+	print '%d sourced precincts unmatched\n' % sourced_unmatched_counter
 
 if __name__ == "__main__":
 	main()
