@@ -147,20 +147,22 @@ def main():
  ###SECOND PASS###
 	#IF 'WEAK' FLAG
 	for vp in vf_unmatched:
-		matches_to_this_vp = 0
 		cnty = vp.vf_county
+		matches_to_this_vp = 0
 		if (cnty in sourcedPrecinctsPerCounty):
 			for sp in sourcedPrecinctsPerCounty[cnty]:
 				if (precinctsWeakMatch(vp,sp)):
 					matches_to_this_vp+=1
 					if (matches_to_this_vp > 1):
 						print "%d WEAK MATCHES! vf_precinct_name %s, 1st s_precinct_name %s, 2nd s_precinct_name %s" % (matches_to_this_vp,
-							vp.vf_precinct_name, vp.s_precinct_name, sp.s_precinct_name)
-					vp.copySourcedInfo(sp)
-					matched.append(vp) #revise in light of multi matches
-					sourcedPrecinctsPerCounty[cnty].remove(sp) #revise in light of multi matches
-				if (matches_to_this_vp == 0):
-					final_vf_unmatched.append(vp)
+							vp.vf_precinct_name, temp, sp.s_precinct_name)
+					temp = sp.vf_precinct_name
+			if (matches_to_this_vp == 1):
+				vp.copySourcedInfo(sp)
+				matched.append(vp)
+				sourcedPrecinctsPerCounty[cnty].remove(sp)
+			if (matches_to_this_vp == 0):
+				final_vf_unmatched.append(vp)
 
 
 		#handle blank final line
@@ -205,7 +207,11 @@ def main():
 
 
 
-#4) validate headers
+#1) adjust loop to deal with multiple matches
+#2) reject weak matches when short_name is numeric
+#3) test
+#4) make header validation look at beginning of row
+
 
 if __name__ == "__main__":
 	main()
