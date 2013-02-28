@@ -2,18 +2,16 @@
 #
 # Derek Turner 2013 for NOI VIP / Election Administration team job application
 #
-#
+
+
 #check presence of two input files; check that they are well formatted
-#read them into memory
-#do a prelim match based on perfect equality
-#do a secondary match? optional
-#output matched and unmatchables
-#special cases to handle?
 
 #sourced: precinct_id,county,precinct_name,precinct_number,ward,polling_location_ids,source,INTERNAL_notes,,,,
 #VF: vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count
 #matched: sourced_precinct_id,vf_precinct_id,sourced_county,vf_precinct_county,sourced_precinct_name,vf_precinct_name,
 #	sourced_precinct_number,vf_precinct_code,sourced_ward,vf_precinct_ward,vf_precinct_count,polling_location_ids
+
+import re
 
 class Precinct:
 	def __init__(self, s_precinct_id='',vf_precinct_id='',s_county='',vf_county='',s_precinct_name='',vf_precinct_name='',
@@ -46,99 +44,168 @@ class Precinct:
 			self.s_precinct_name,self.vf_precinct_name,self.s_precinct_number,self.vf_precinct_code,self.s_ward,self.vf_ward,
 			self.vf_precinct_count,self.polling_location_ids)
 	def getVFInfo(self):
-		return '%s,%s,%s,%s,%s,%s\n' % (self.vf_precinct_id,self.vf_county,self.vf_ward,self.vf_precinct_name,self.vf_precinct_code,
-			self.vf_precinct_count)
+		return '%s,%s,%s,%s,%s,%s\n' % (self.vf_precinct_id,self.vf_county,self.vf_ward,self.vf_precinct_name,
+			self.vf_precinct_code,self.vf_precinct_count) #ordering consistent with input, although the example output file differs			
 	def getSourcedInfo(self):
-		return '%s,%s,%s,%s,%s,%s\n' % (self.s_precinct_id,self.s_county,self.s_precinct_name,self.s_precinct_number,self.s_ward,
-			self.polling_location_ids) #matching the example output leaves off self.source,self.internal_notes
+		return '%s,%s,%s,%s,%s,%s,%s,%s\n' % (self.s_precinct_id,self.s_county,self.s_precinct_name,self.s_precinct_number,
+			self.s_ward,self.polling_location_ids,self.source,self.internal_notes) #source,internal_notes are not in example output
 
 def countySort(precinctObj):
-		if (precinctObj.vf_county != ''): return precinctObj.vf_county
-		else: return precinctObj.s_county 
+	if (precinctObj.vf_county != ''): return precinctObj.vf_county
+	else: return precinctObj.s_county 
+
+def precinctsStrongMatch(vp,sp):
+	if (vp.vf_precinct_code == sp.s_precinct_number): return True
+	if (vp.vf_precinct_code.lstrip('0') == sp.s_precinct_number.lstrip('0')): return True
+	if (vp.vf_precinct_name.lower() == sp.s_precinct_name.lower()): return True
+	return False
+	
+def precinctsWeakMatch(vp,sp):
+	short_name = re.sub('[()]','',sp.s_precinct_name) #unmatched parentheses are a problem in regex pattern, so all parens are removed
+	long_name = re.sub('[()]','',vp.vf_precinct_name)
+	#print '\tworking with short_name(sp) %s and long_name(vp) %s (%s county)' %(short_name,long_name,vp.vf_county)
+	if ((short_name == '') or (long_name == '')): return False
+	#maybe add condition that short_name not be all digits
+	match = re.search(short_name,long_name,re.IGNORECASE)
+	if (match):
+		#print 'substring name match! %s and %s (s_precinct_id %s, vf_precinct_id %s)' % (short_name, long_name, sp.s_precinct_id,vp.vf_precinct_id)
+		return True
+	return False
 		
 def main():
-	sourcedPrecinctsPerCounty = {} #dictionary with key= county_name and value= LIST of Precinct objects
+	sourcedPrecinctsPerCounty = {} #dictionary with key=county_name and value=LIST of Precinct objects
 	vfPrecincts = [] #list of Precinct objects
 	matched = []
 	sourced_unmatched = []
 	vf_unmatched = []
+	final_vf_unmatched = []
 
-	sfile = open('sourced_precincts.csv', 'r')
-	counter = 0
+	try: 
+		sfile = open('sourced_precincts.csv', 'r')
+	except IOError:
+		print "The input file 'sourced_precincts.csv' must be present in the same directory as this script"
+		return
+	rownum = 0
 	for line in sfile:
-		parts = line.split(',') #assumes no values contain commas, which is the case in sample data. if this weren't so, would use csv module
-		if (counter != 0): #skip header
+		if (rownum == 0 ): #header row
+			try:
+				if (not re.search("precinct_id,county,precinct_name,precinct_number,ward,polling_location_ids,source,INTERNAL_notes",line)):
+					raise ValueError
+			except ValueError:
+				print "The input file 'sourced_precincts.csv' must begin with these headers, in order:"
+				print "precinct_id,county,precinct_name,precinct_number,ward,polling_location_ids,source,INTERNAL_notes"
+				return
+		else: #all subsequent rows
+			parts = line.split(',') #assumes no values contain commas, which is the case in sample data. if this weren't so, would use csv module
 			precinctObj = Precinct(s_precinct_id=parts[0],s_county=parts[1],s_precinct_name=parts[2],s_precinct_number=parts[3],s_ward=parts[4],polling_location_ids=parts[5],source=parts[6],internal_notes=parts[7].strip())
 			cnty = parts[1]
 			if (cnty in sourcedPrecinctsPerCounty):
 				sourcedPrecinctsPerCounty[cnty].append(precinctObj)
 			else:
 				sourcedPrecinctsPerCounty[cnty] = [precinctObj]
-		counter+=1		
+		rownum+=1		
 	sfile.close()
 	
-	vfile = open('vf_precincts.csv', 'r')
-	counter = 0
+	try:
+		vfile = open('vf_precincts.csv', 'r')
+	except IOError:
+		print "The input file 'vf_precincts.csv' must be present in the same directory as this script"
+		return
+	rownum = 0
 	for line in vfile:
-		if (counter != 0): #skip header
+		if (rownum == 0): #header row
+			try:
+				if (not re.search("vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count",line)):
+					raise ValueError
+			except ValueError:
+				print "The input file 'vf_precincts.csv' must begin with these headers, in order:"
+				print "vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count"
+				return
+		else: #all subsequent rows
 			parts = line.split(',')
 			vfPrecincts.append(Precinct(vf_precinct_id=parts[0],vf_county=parts[1],vf_ward=parts[2],vf_precinct_name=parts[3],vf_precinct_code=parts[4],vf_precinct_count=parts[5].strip()))
-		counter+=1	
+		rownum+=1	
 	vfile.close()
 
-	for vp in vfPrecincts:
+	for vp in sorted(vfPrecincts,key=countySort):
+	#TAKE A SINGLE VF PRECINCT
 		match_found = False
 		cnty = vp.vf_county
 		if (cnty in sourcedPrecinctsPerCounty):
 			for sp in sourcedPrecinctsPerCounty[cnty]:
-				if ((vp.vf_precinct_code == sp.s_precinct_number) or (vp.vf_precinct_name == sp.s_precinct_name)): 
+			#GET A LIST OF EVERY SOURCED PRECINCT IN THAT SAME COUNTY
+				#FALSELY MATCH TO MULTIPLES OF THEM
+				if (precinctsStrongMatch(vp,sp)):
 					vp.copySourcedInfo(sp)
 					matched.append(vp)
-					sourcedPrecinctsPerCounty[cnty].remove(sp)
-					match_found = True
-		if (not match_found):
-			vf_unmatched.append(vp)
+					sourcedPrecinctsPerCounty[cnty].remove(sp) #AND FOR EACH FALSE MATCH, A POTENTIAL SOURCED PRECINCT IS LOST, AND THE TRUE VF MATCH FOR THAT ONE IS ORPHANED
+					match_found = True #COULD MAKE THIS A COUNTER OF SOME KIND?
+															#OR COULD DO A SECOND PASS
+			if (not match_found):
+				vf_unmatched.append(vp)
+				#print 'now %s in vf_unmatched incl vf_precinct_id %s' % (len(vf_unmatched),vp.vf_precinct_id)
+ ###SECOND PASS###
+	#IF 'WEAK' FLAG
+	for vp in vf_unmatched:
+		matches_to_this_vp = 0
+		cnty = vp.vf_county
+		if (cnty in sourcedPrecinctsPerCounty):
+			for sp in sourcedPrecinctsPerCounty[cnty]:
+				if (precinctsWeakMatch(vp,sp)):
+					matches_to_this_vp+=1
+					if (matches_to_this_vp > 1):
+						print "%d WEAK MATCHES! vf_precinct_name %s, 1st s_precinct_name %s, 2nd s_precinct_name %s" % (matches_to_this_vp,
+							vp.vf_precinct_name, vp.s_precinct_name, sp.s_precinct_name)
+					vp.copySourcedInfo(sp)
+					matched.append(vp) #revise in light of multi matches
+					sourcedPrecinctsPerCounty[cnty].remove(sp) #revise in light of multi matches
+				if (matches_to_this_vp == 0):
+					final_vf_unmatched.append(vp)
+
+
 		#handle blank final line
 	
-	print '############## MATCHED #############'
-	fmatched = open('test_output/matched_test.csv','w')
+	### MATCHED ###
+	fmatched = open('matched_test.csv','w')
+		#update output file names to spec
 	fmatched.write('sourced_precinct_id,vf_precinct_id,sourced_county,vf_precinct_county,sourced_precinct_name,vf_precinct_name,sourced_precinct_number,vf_precinct_code,sourced_ward,vf_precinct_ward,vf_precinct_count,polling_location_ids\n')
 	for p in sorted(matched,key=countySort):
 		fmatched.write(p.getCombinedInfo())
 	fmatched.close()
 	
-	print '############## VF UNMATCHED ##########'
-	fvf_unmatched = open('test_output/vf_unmatched_test.csv','w')
-	fvf_unmatched.write('vf_precinct_id,vf_precinct_county,vf_precinct_name,vf_precinct_code,vf_precinct_ward,vf_precinct_count\n') 
+	### VF UNMATCHED ###
+	#change the list to be using final_vf_unmatched or somehow integrate the two lists of unmatched (from strong, weak)
+	fvf_unmatched = open('vf_unmatched_test.csv','w')
+	fvf_unmatched.write('vf_precinct_id,vf_precinct_county,vf_precinct_ward,vf_precinct_name,vf_precinct_code,vf_precinct_count\n') 
 	for p in sorted(vf_unmatched,key=countySort):
 		fvf_unmatched.write(p.getVFInfo())
 	fvf_unmatched.close() 
 	#handle zero unmatched
 	
-	print '############## SOURCED UNMATCHED ############'
+	### SOURCED UNMATCHED ###
 	sourced_unmatched_counter = 0
-	fs_unmatched = open('test_output/sourced_unmatched_test.csv','w')
-	fs_unmatched.write('sourced_precinct_id,sourced_county,sourced_precinct_name,sourced_precinct_number,sourced_ward,polling_location_ids\n')
+	fs_unmatched = open('sourced_unmatched_test.csv','w')
+	fs_unmatched.write('sourced_precinct_id,sourced_county,sourced_precinct_name,sourced_precinct_number,sourced_ward,polling_location_ids,source,internal_notes\n')
 	for cnty in sorted(sourcedPrecinctsPerCounty.keys()):
 		for p in sourcedPrecinctsPerCounty[cnty]:
 			fs_unmatched.write(p.getSourcedInfo())
 			sourced_unmatched_counter+=1
 	fs_unmatched.close()
 	
-	print 'num matched is %d' % len(matched)
-	print 'num vf_unmatched is %d ' % len(vf_unmatched)
-	print 'num sourced_unmatched is %d' % sourced_unmatched_counter
+	print 'Matched %d precincts' % len(matched)
+	print '%d vf precincts unmatched' % len(vf_unmatched)
+	print '%d sourced precincts unmatched' % sourced_unmatched_counter
 
 	#county names should match exactly; 
 	#vf_precinct_name may contain the sourced_name (example, vf_precinct_name 'Canyon - 09' contains sourced name '9')
 	#sourced_precinct_number may match vf_precinct_code except for leading zero
 	
 	print 'done!'
-#1) sort list of Precinct Objects -- DONE
 
-#3) output to files
-#2) experiment with adding other match criteria
+
+
+
 #4) validate headers
-#5) make a web app
+
 if __name__ == "__main__":
 	main()
